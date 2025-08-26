@@ -2,10 +2,7 @@
 # You can also start simply with 'default'
 theme: default
 lineNumbers: true
-# random image from a curated Unsplash collection by Anthony
-# like them? see https://unsplash.com/collections/94734566/slidev
-# some information about your slides (markdown enabled)
-title: Welcome to Slidev
+title: Pycon GR 2025
 info: |
   ## Slidev Starter Template
   Presentation slides for developers.
@@ -49,7 +46,6 @@ mdc: true
  opacity: 0.3 !important;
 }
 
-
 .shiki .highlghted {
  background-color: red !important;
 }
@@ -66,8 +62,8 @@ h1 {
  display: grid;
  grid-template-columns: 1fr 1fr;
  gap: 20px;
- align-items: stretch;
 }
+
 </style>
 
 
@@ -145,7 +141,7 @@ import unittest.mock as mock
 
 mock_object = mock.Mock()
 
-mock_object.some_method()  # calling some random method returns another mock object
+mock_object.some_method()  # calling any method returns another mock object
 
 mock_object.some_method.assert_called_once() # we can track interactions with the mock object
 
@@ -162,58 +158,124 @@ Mocks & MagicMocks.
 
 ---
 
-# Difference between `Mock` and `MagicMock`?
+# Difference between `MagicMock` and `Mock`?
 
-The main difference is that `MagicMock` has "magic methods" pre-defined and ready to use, while `Mock` does not.
+The main difference is that `MagicMock` has "magic methods" ready to use, while `Mock` does not.
 
-This means that if you need to mock an object that uses magic methods, such as a context manager or a container, you should use `MagicMock`.
+Prefer `MagicMock` whenever an object uses special methods, like `Sequence` (`list`, `tuple`) or a context manager object that defines `__enter__` & `__exit__`.
 
 <div class="twocol">
 
-```python [example_magic_mock.py]
+```python [example_magic_mock_pass.py ✅]
 import unittest.mock as mock
 
 mock_object = mock.MagicMock()
 
-# MagicMock has __enter__ & __exit__ magic methods
+# MagicMock has __enter__ & __exit__ magic methods 👍
 with mock_object as m:
     pass
 
+# any other magic methods are also available 👍
+len(mock_object)
+
 # track interactions with the mock object
 mock_object.__enter__.assert_called_once()
+mock_object.__len__.assert_called_once()
 ```
 
-```python [example_mock_fail.py]
+```python [example_mock_fail.py ❌]
 import unittest.mock as mock
 
 mock_object = mock.Mock()
 
-# Mock does not have __enter__ & __exit__ magic methods
+# Mock does not have __enter__ & __exit__
 with mock_object as m:
     pass
+
+# TypeError💥 'Mock' object does not support 
+# the context manager protocol
 ```
 </div>
 
----
+<!--
+This means that if you need to mock an object that uses magic methods, you should use `MagicMock`. 
 
-# Pure mocks
-
-<br/>
-
-## Pros
-Pure mocks, help us track and validate the order of calls and the exact arguments with which the mocked objects
-are being invoked, we set fixtures and return values as a means to aid the flow of execution of our unit under test
-
-## Cons
-and our goal is to verify the interactions of our unit under test with the mocked code, we do not actually care beyond this
-scope, we assume that the mocked code given valid arguments will produce valid results. In other terms we test the behavior
-of our code.
+These can be a `Sequence` like a `List`, or a context manager that defines `__enter__` & `__exit__`.
+-->
 
 ---
 
-# Mocking helps us validate behaviour example
+# An example: generating HTTP headers for a request
+You are given an in-house authentication library to get a token, with the following signature:
 
-<div class="twocol">
+```python [authlib.py]
+def authenticate(account_id: str, resource_id: Optional[str] = None) -> str:
+    """
+    Calls a remote authentication service to get a token for a specific resource.
+    
+    Args
+    ----
+        account_id: str, example "some-project-dev"
+        resource_id: Optional[str], a target service id that 
+            we want to authneticate for, e.g. "STORAGE-SERVICE-XXXXXX"
+    
+    Returns
+    -------
+        str, a token
+    """
+    ...
+```
+
+<!--
+We have an in-house authentication library with a function called authenticate. 
+
+It goes off to some remote service and gives us back a token.
+
+It takes an account_id — that’s required — and an optional resource_id. 
+
+The idea is: sometimes we want a generic token for an account
+
+but other times we need a token specific to a resource, like a storage service.
+-->
+
+---
+
+# An example: generating HTTP headers for a request
+
+We want to include the token in the `Authorization` header of our HTTP requests, along with some static headers. These headers are part of a client library we are writing.
+
+```python [headers.py]
+class Configuration:
+ user_id: str
+ resource_id: Optional[str] = None
+
+def get_headers(config: Configuration) -> dict:
+ token = authlib.authenticate(
+   config.user_id
+ )
+
+ return {
+   "Content-Type": "application/json",
+   "Authorization": f"Bearer {token}"
+ }
+```
+
+<!--
+Our utility function get_headers takes this configuration, calls authlib.authenticate, and uses the returned token to build a dictionary of HTTP headers.
+
+We include the token in the Authorization header of our request, along some static headers like content-type.
+
+When testing get_headers, we need to make sure to replace authenticate with a test double
+
+but what type of test double to use in this case?
+-->
+
+---
+
+# Mocks + stubs: verify behaviour and results
+We stub `authenticate` to control the token with expected results<span v-click=1>, then assert the arguments of the call.</span>
+
+<div class="twocol -mt-4">
 
 ````md magic-move [test_headers.py] {lines: true}
 ```python {12}
@@ -256,7 +318,7 @@ def test_get_headers(self, mock_auth):
 ````
 
 ````md magic-move [headers.py] {at:1, lines:true}
-```python {15}  <!-- add plus one -->
+```python {18}  <!-- add plus one -->
 import authlib
 
 @dataclass
@@ -265,7 +327,10 @@ class Configuration:
  resource_id: Optional[str] = None
 
 def get_headers(config: Configuration) -> dict:
- token = authlib.authenticate_basic(config.user_id)
+ token = authlib.authenticate(
+    config.user_id 
+    # a bug 🐞 here
+ )
 
  return {
    "Content-Type": "application/json",
@@ -273,19 +338,18 @@ def get_headers(config: Configuration) -> dict:
  }
 ```
 
-```python {12}
+```python {11}
 import authlib
 
 @dataclass
 class Configuration:
  user_id: str
  resource_id: Optional[str] = None
- secret: str
 
 def get_headers(config: Configuration) -> dict:
  token = authlib.authenticate(
    config.user_id,
-   config.resource_id  # missing
+   config.resource_id  # was missing
  )
 
  return {
@@ -296,6 +360,21 @@ def get_headers(config: Configuration) -> dict:
 ````
 </div>
 
+<!--
+We maybe tempted to just stub authenticate by fixing its return value to a dummy `token` string.
+This test has full coverage, and it passes. 
+
+But if you recall `authenticate`'s signature, in fact we didn't actually propagate the `resource_id` we got in the configuration object.
+
+Our unit test would still be successful, but we would totally miss the link between `resource_id` and the generated token.
+
+--
+
+To fix that, we can use mocks to also assert the arguments of the call to `authenticate`.
+
+Now if we forget to pass `resource_id`, the test will fail, alerting us to the bug.
+
+-->
 
 ---
 
