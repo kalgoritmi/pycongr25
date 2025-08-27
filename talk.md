@@ -213,55 +213,105 @@ And this is not limited to `with` blocks, it might as well be other special meth
 
 ---
 
-# How to replace an object with a mock?
-We can use `mock.patch` to replace an object in a specific module with a mock.
+# How to replace an object with a test double?
+Does the function we are testing **own** the dependency we want to replace?
+<br/> ➡️ Then use `mock.patch` **where the dependency is used** not where it is defined.
 
-<div class="twocol">
+<div class="twocol -mt-2">
 
-<div class="flex flex-col">
+```python [test_example_with_dep.py]
+import example_with_dep
+import unittest.mock as mock
 
-```python [app.py]
-from storage import StorageClient
+# @mock.patch("io.FileIO")  ❌ does not work
+@mock.patch("example_with_dep.FileIO") # ✅ works
+def test_read_file(mock_io: mock.MagicMock):
+  example_with_dep.read_file("some-file.txt")
 
-def fetch_an_object(client: StorageClient, key: str) -> bytes:
-  with client as c:  # connects to object storage
-    return c[key]
-
+  # assert that we entered the with block
+  mock_io.return_value.__enter__.assert_called_once()
 ```
 
-```python [example_patch.py]
-from main import fetch_an_object
+```python [example_with_dep.py]
+from io import FileIO
 
-# @patch("storage.StorageClient")  # ❌ does not work
-@patch("main.StorageClient")  # ✅ patch where it's used
-def test_fetch_an_object(mock_storage_client: MagicMock):
-  fetch_an_object("some-key")
-  mock_storage_client.__enter__.return_value.assert_called_once()
+# function directly uses FileIO
+def read_file(filename: str) -> bytes:
+  with FileIO(filename) as f:
+    return f.read()
 ```
-
 </div>
 
-```python [storage.py]
-class StorageClient:
-  def __enter__(self):
-    print("Opening connection...")
-    return self
+<div v-click class="mt-2 p-2 border rounded-xl bg-yellow-50 bg-opacity-75">
+Why global patching does not work?
 
-  def __exit__(self, exc_type, exc, tb):
-    print("Closing connection...")
-
-  def __getitem__(self, key: str) -> bytes:
-```
+1. `from io import FileIO` creates a local reference to `FileIO` in the `example_with_dep` module.
+2. Our patch targets `io.FileIO`, but `read_file` uses the local reference.
+3. We would have to patch before importing or `reload(example_with_dep)` - both not a good practice.
 
 </div>
 
 <!--
-Now that we know what a mock object does, we need a way to replace them in functions that may not support passing dependencies. 
+By default `mock.patch` replaces the object with a `MagicMock`.
 
-Our first thought might be to patch the module where the object is defined, but that would not work.
-
-We have to patch the module where the object is used, because that is where the reference to the object is held.
+You can provide your own mock object with the `new` argument.
 -->
+
+---
+
+# Alternative: replace with Dependency Injection
+If function we are testing expects the dependency as an argument.
+<br/> ➡️ pass the `MagicMock` instead, no need to use `mock.patch`
+
+<div class="twocol -mt-2">
+
+```python [test_example_with_di.py]
+import example_with_di
+import unittest.mock as mock
+
+def test_read_file():
+  mock_io = mock.MagicMock(spec=FileIO)
+
+  example_with_di.read_file(mock_io)
+
+  # assert that we entered the with block
+  mock_io.read.assert_called_once()
+```
+
+```python [example_with_di.py]
+from io import FileIO
+
+# function directly uses FileIO
+def read_file(file_: FileIO) -> bytes:
+  # just operate on the file object
+  # caller manages opening/closing
+  return f.read()
+```
+
+</div>
+
+---
+
+# What is a stub? How does it differ from a mock?
+It provides predefined responses to function calls, but does not track interactions.
+
+We can use a `Mock` or `MagicMock` object for stubbing by fixing the return value of a method.
+
+These objects can double as both a mock and a stub.
+
+```python [example_stub_fixed.py]
+import unittest.mock as mock
+
+mock_object = mock.Mock()
+
+mock_object.some_method.return_value = "some value"
+assert mock_object.some_method() == "some value"
+
+# we can also raise exceptions
+mock_object.raise_method.side_effect = ValueError("some value")
+
+mock_object.raise_method()  # raises ValueError 💥 
+```
 
 ---
 
@@ -438,6 +488,61 @@ Now if we forget to pass `resource_id`, the test will fail, alerting us to the b
 
 ---
 
-# Stubs
+# What is a fake?
+A fake is a working implementation, but simplified and not suitable for production.
+
+We can use `spec` to provide a minimal implementation of a method.
+
+```python [example_poll.py]
+import time
+
+from some_service import check_ready
+
+def poll_until_ready(timeout: int = 15, interval: int = 2):
+  start = time.time()
+  while time.time() - start <= timeout:
+    if check_ready():
+      return
+      time.sleep(interval)
+  raise TimeoutError("Service did not become ready in time")
+```
+
+```python [test_poll.py]
+import itertools
+import unittest.mock as mock
+
+from example_poll import poll_until_ready
+
+@mock.patch("example_fake.time", autospec=True)
+@mock.patch("example_fake.check_ready")
+def test_poll_until_ready(mock_check_ready, mock_time):
+  # working fake implementation of time.time()
+  mock_time.time.side_effect = itertools.count(0, 20)
+  mock_check_ready.return_value = False # stub
+
+  # completes successfully
+  assert poll_until_ready() is None
+
+
+```
+
+---
+
+# Takeaway
+
+<div class="grid grid-cols-5 auto-rows-min gap-0 max-w-4xl mx-auto mt-10">
+  <div v-click class="col-span-2 row-start-1 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
+    Mocks 🎭 <br/> <span class="text-xl font-semibold italic"> verifies behavior </span>
+  </div>
+  <div v-click class="col-span-2 col-start-2 row-start-2 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
+    Stubs 🪤 <br/> <span class="text-xl font-semibold italic"> controls outputs </span>
+  </div>
+  <div v-click class="col-span-2 col-start-3 row-start-3 border-2 rounded-2xl p-6 shadow-lg text-center  -mt-4 bg-white">
+    Fakes 🏗️ <br/> <span class="text-xl font-semibold italic">working minimal replacements</span>
+  </div>
+  <div v-click class="col-span-2 col-start-4 row-start-4 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
+    Spies 🕵️ <br/> <span class="text-xl font-semibold italic">wraps for inspection</span>
+  </div>
+</div>
 
 ---
