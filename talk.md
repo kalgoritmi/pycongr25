@@ -489,42 +489,91 @@ Now if we forget to pass `resource_id`, the test will fail, alerting us to the b
 ---
 
 # What is a fake?
-A fake is a working implementation, but simplified and not suitable for production.
+A fake is a working implementation, but it is kept lightweight for testing purposes.
 
-We can use `spec` to provide a minimal implementation of a method.
+It helps us avoid complex dependencies, I/O operations, or external services, without the need for maintaining stub states.
 
-```python [example_poll.py]
-import time
+<div class="twocol">
 
-from some_service import check_ready
+```python [storage.py]
+# real dependency (talks to a service)
+class StorageClient:
+  def __enter__(self):
+    self.connect()
+    return self
 
-def poll_until_ready(timeout: int = 15, interval: int = 2):
-  start = time.time()
-  while time.time() - start <= timeout:
-    if check_ready():
-      return
-      time.sleep(interval)
-  raise TimeoutError("Service did not become ready in time")
+  def __exit__(self, exc_type, exc_value, traceback):
+    self.disconnect()
+
+  def __getitem__(self, key: str):
+    return self.read_from_service(key)
+
+  def __setitem__(self, key: str, value):
+    self.write_to_service(key, value)
 ```
 
-```python [test_poll.py]
-import itertools
+```python [example_fake.py]
+# fake dependency (in-memory implementation)
+class FakeStorageClient:
+  def __init__(self):
+    self.__store = {}
+
+  def __getitem__(self, key: str):
+    return self.__store.get(key)
+
+  def __setitem__(self, key: str, value):
+    self.__store[key] = value
+```
+
+</div>
+
+---
+
+# Concrete example: using a fake for testing
+We have a service that uses a `StorageClient` to read and write data.
+
+Let's say we have a slightly more sophisticated service that uses a `StorageClient` to read and write data, serilize and deserialize JSON, and chunk them before saving if they are too large.
+
+I will show that this way I can test serialization, deserialization, and chunking logic without needing to stub every interaction with the storage client. I can check the number of chunks for a write operation, and I can check that the data I read is the same as what I wrote.
+
+
+---
+
+# What is a spy?
+A spy is a test double that wraps a real object, allowing us to monitor its interactions while still using its actual implementation.
+
+We can use a `MagicMock` with the `wraps` argument to create a spy.
+
+<div class="flex flex-col -mt-4">
+
+```python [example_spy.py]
 import unittest.mock as mock
 
-from example_poll import poll_until_ready
+class DollarConverter:
+  rates = {
+    "USD": 1,
+    "EUR": 0.9,
+    "GBP": 0.8,
+  } # static data
 
-@mock.patch("example_fake.time", autospec=True)
-@mock.patch("example_fake.check_ready")
-def test_poll_until_ready(mock_check_ready, mock_time):
-  # working fake implementation of time.time()
-  mock_time.time.side_effect = itertools.count(0, 20)
-  mock_check_ready.return_value = False # stub
+  def convert_dollars(self, amount: float, currency: str) -> float:
+    return rate.get(currency, 0) * amount
 
-  # completes successfully
-  assert poll_until_ready() is None
+spy_object = mock.MagicMock(wraps=DollarConverter(), autospec=True)
+euros = spy_object.convert_dollars(10, "EUR")
 
-
+assert euros == 9  # uses the real method
+spy_object.method.assert_called_once_with(3)  # tracks the call
 ```
+
+</div>
+
+---
+
+# Using a spy to inspect serialization/deserialization for StorageClient
+We can use a spy to wrap the real `StorageClient` and monitor its interactions while still using its actual implementation.
+
+show code
 
 ---
 
