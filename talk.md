@@ -158,11 +158,11 @@ Mocks & MagicMocks.
 
 ---
 
-# Difference between `MagicMock` and `Mock`?
+# Difference between `MagicMock` and `Mock`
 
 The main difference is that `MagicMock` has "magic methods" ready to use, while `Mock` does not.
 
-Prefer `MagicMock` whenever an object uses special methods, like `Sequence` (`list`, `tuple`) or a context manager object that defines `__enter__` & `__exit__`.
+Prefer `MagicMock` whenever an object uses special methods, like `Sequence` (`list`, `tuple`) or a context manager that defines `__enter__` & `__exit__`.
 
 <div class="twocol">
 
@@ -198,9 +198,69 @@ with mock_object as m:
 </div>
 
 <!--
-This means that if you need to mock an object that uses magic methods, you should use `MagicMock`. 
+What is the difference between the two though?
 
-These can be a `Sequence` like a `List`, or a context manager that defines `__enter__` & `__exit__`.
+Let's see an example, suppose we want to use the object in a `with` block. 
+
+In order to do that our object needs to define the context manager protocol, this means it needs to define `__enter__` & `__exit__` ,  which are magic methods.
+
+However, `Mock` objects do not do this automatically! As we can see in the right column our snippet fails with a `TypeError`
+
+We have to use a `MagicMock` if we are going call magic methods in the code we are replacing. 
+
+And this is not limited to `with` blocks, it might as well be other special methods like `length`, if the object we are replacing behaves like a  `Sequence`.
+-->
+
+---
+
+# How to replace an object with a mock?
+We can use `mock.patch` to replace an object in a specific module with a mock.
+
+<div class="twocol">
+
+<div class="flex flex-col">
+
+```python [app.py]
+from storage import StorageClient
+
+def fetch_an_object(client: StorageClient, key: str) -> bytes:
+  with client as c:  # connects to object storage
+    return c[key]
+
+```
+
+```python [example_patch.py]
+from main import fetch_an_object
+
+# @patch("storage.StorageClient")  # ❌ does not work
+@patch("main.StorageClient")  # ✅ patch where it's used
+def test_fetch_an_object(mock_storage_client: MagicMock):
+  fetch_an_object("some-key")
+  mock_storage_client.__enter__.return_value.assert_called_once()
+```
+
+</div>
+
+```python [storage.py]
+class StorageClient:
+  def __enter__(self):
+    print("Opening connection...")
+    return self
+
+  def __exit__(self, exc_type, exc, tb):
+    print("Closing connection...")
+
+  def __getitem__(self, key: str) -> bytes:
+```
+
+</div>
+
+<!--
+Now that we know what a mock object does, we need a way to replace them in functions that may not support passing dependencies. 
+
+Our first thought might be to patch the module where the object is defined, but that would not work.
+
+We have to patch the module where the object is used, because that is where the reference to the object is held.
 -->
 
 ---
