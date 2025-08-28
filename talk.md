@@ -290,22 +290,27 @@ Note that patching globally at the place `FileIO` is defined does not work. Why 
 ---
 
 # Better way: use Dependency Injection
-If the function we are testing expects the dependency as an argument.
+If the function we are testing expects the dependency as a parameter.
 <br/> ➡️ pass the `MagicMock` instead, no need to use `mock.patch`
 
 <div class="twocol -mt-2">
 
-```python [test_example_with_di.py]
+```python [test_example_with_di.py] {none|5,14-15}
 import example_with_di
 import unittest.mock as mock
 
 def test_read_file():
   mock_io = mock.MagicMock(spec=FileIO)
 
+  mock_io.open()
   example_with_di.read_file(mock_io)
+  mock_io.close()
 
   # assert that we entered the with block
   mock_io.read.assert_called_once()
+
+  mock_io.arbitrary_method() # raises AttributeError 💥 
+  # Mock object has no attribute 'arbitrary_method'
 ```
 
 ```python [example_with_di.py]
@@ -321,13 +326,17 @@ def read_file(opened_file: FileIO) -> bytes:
 </div>
 
 <!--
-In cases where we test code that expects dependencies as arguments to function calls and we can control it.
+In what other ways can we replace a dependency?
 
-We can pass the mock object directly in place of the dependency.
+In this example, we call read_file. The implementation simply returns the contents of the already opened file.
 
-Additionally, we can set the `spec` argument to match the object being replaced, in this case `FileIO`.
+Notice that read_file does not own the FileIO object, it just operates on it.
 
-No need to use patch in this case.
+When a function accepts its dependency as a parameter, there’s no need to patch. Instead, pass a mock object in place of the dependency.
+
+-- In the test, we create a MagicMock with a spec argument. The spec makes the mock strictly follow the protocol of the FileIO class.
+
+That’s why calling an arbitrary method on it raises an AttributeError the mock only allows real FileIO methods.
 -->
 
 ---
@@ -369,20 +378,18 @@ def test_read_file():
 
 </div>
 
-Use `autospec` to strictly fol `FileIO`'s protocol.
+Use `autospec` to automatically follow `FileIO`'s protocol.
 
 <!--
-In case we cannot inject the dependency, there are many ways to patch besides the decorator we saw before.  --
+If we can’t inject, we patch as we saw earlier. 
 
-The most common ones are using `mock.patch` & `mock.patch.object` as context managers.
+-- Besides decorators, we can use `patch`  as context manager. 
 
--- We can use `mock.patch.object` to patch attributes of an object. 
+-- `patch.object` is also handy when the module is already imported, and we patch its attributes directly.
 
-This is useful since we have already imported the module we want to test.
+Just like the decorator, the patch only lives for the with block.
 
-Just like the decorator, the context manager starts and stops the patch for the duration of the `with` block.
-
-We can use `autospec` to have the mock automatically abide to `FileIO`'s protocol, any not defined method call will result in error.
+We can use the `autospec` flag to have the mock automatically deduce which protocol to follow.
 -->
 
 ---
@@ -412,7 +419,7 @@ mock_object.raise_method()  # raises ValueError 💥
 ```
 
 <!--
-As of now we have covered mocks but what is a stub, how do they differ?
+As of now we have covered mocks but what is a stub, how does it differ?
 `Stubs` provide canned responses, helping us test outputs or control intermediate results.
 
 `Mock` & `MagicMock`, the usual suspects can be used to provide these results for functions that we expect to be called by the code we test. In our example this function is called `some_method`
@@ -601,7 +608,7 @@ Now if we forget to pass `resource_id`, the test will fail, alerting us to the b
 # What is a fake?
 A fake is a working implementation, but it is kept lightweight for testing purposes.
 
-It helps us avoid complex dependencies, I/O operations, or external services, without the need for maintaining stub states.
+Avoids complex dependencies, I/O operations, or external services ➕ no need maintaining stub states.
 
 <div class="twocol">
 
@@ -643,6 +650,21 @@ class FakeStorageClient:
 
 </div>
 
+<!--
+Do we have to always use stubs? What is a fake?
+A fake is a working implementation, but simplified for testing.
+
+Unlike stubs, you don’t have to predefine return values. The fake behaves like the real thing, just without the heavy parts.
+
+That means no network calls, no file I/O, and no external services — but still realistic behavior.
+
+On the left, the real StorageClient - let's suppose it follows the Mapping protocol -  talks to real a service.
+
+On the right, the FakeStorageClient just uses an in-memory dictionary.
+
+This avoids maintaining stub states and makes tests faster and more reliable, while being close enough to production behavior.
+-->
+
 ---
 
 # Concrete example: using a fake for testing
@@ -671,14 +693,14 @@ class DollarConverter:
     "GBP": 0.8,
   } # static data
 
-  def convert_dollars(self, amount: float, currency: str) -> float:
+  def convert(self, amount: float, currency: str) -> float:
     return rate.get(currency, 0) * amount
 
 spy_object = mock.Mock(wraps=DollarConverter(), autospec=True)
-euros = spy_object.convert_dollars(10, "EUR")
+euros = spy_object.convert(10, "EUR")
 
 assert euros == 9  # uses the real method
-spy_object.convert_dollars.assert_called_once_with(10, "EUR")  # tracks the call
+spy_object.convert.assert_called_once_with(10, "EUR")  # tracks the call
 ```
 
 </div>
@@ -705,9 +727,15 @@ show code
     Fakes 🏗️ <br/> <span class="text-xl font-semibold italic">working minimal replacements</span>
   </div>
   <div v-click class="col-span-2 col-start-4 row-start-4 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
-    Spies 🕵️ <br/> <span class="text-xl font-semibold italic">wraps for inspection</span>
+    Spies 🕵️ <br/> <span class="text-xl font-semibold italic">wraps real code for inspection</span>
   </div>
 </div>
+
+<!--
+This brings us to the takeaways.
+
+We covered...
+-->
 
 ---
 
@@ -719,15 +747,19 @@ show code
 
 * Prefer `MagicMock` over `Mock` unless you are sure you don't need magic methods
 
-* Use `autospec` to make the mock abide to the real object's protocol
+* Use `autospec` / `spec` to make the mock strictly follow the real object's protocol
 
 * Prefer Dependency Injection over patching when possible, use patching when you interact with 3rd party code, that is not modular
 
-* If you need to patch, patch where it is used
+* If you need to patch, **patch where the dependency is used**
 
-* `Mock` & `MagicMock` can do all types of test doubles
+* In `unittest`, `Mock` & `MagicMock` can be used in a way that combines all types of test doubles
 
 </v-clicks>
+
+<!--
+A few more things to watch for...
+-->
 
 ---
 layout: center
