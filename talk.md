@@ -26,6 +26,11 @@ mdc: true
  --slidev-code-background: #f6f8fa;
 }
 
+.slidev-page ul > li::marker {
+  content: "👉 ";
+  font-size: 1.1em;
+}
+
 .slidev-page:not(:first-child)::after {
   content: attr(data-slidev-no);
   position: absolute;
@@ -88,7 +93,7 @@ A test double is to code what a stunt double is to an actor.
 <!--
 Just like actors don’t perform every dangerous scene themselves and stunt doubles step in for them.
 
-Okay maybe not Tom Cruise.
+Okay maybe not Tom Cruise, he does his own stunts.
 
 In the same way, we use test doubles in place of real objects. They take the risks for us — making our tests faster, safer, and more predictable.
 
@@ -132,41 +137,51 @@ And in fact they can be used together as well.
 
 A type of test double that we can use to replace real objects in our code.
 
-It replaces the orginal object with that we can control the behavior of, and allows us to track the interactions with the mocked object. 
+Replace real object ➡️ Control behavior ➡️ Track interactions (call arguments) 
 
-When using the `unittest` framework we can use either `Mock` or `MagicMock` classes to create a mock object.
+In `unittest` framework ➡️ create mocks with either `Mock` or `MagicMock`.
 
-```python [example_mock.py]
+```python [example_mock.py] {none|5,8-9}
 import unittest.mock as mock
 
 mock_object = mock.Mock()
 
-mock_object.some_method()  # calling any method returns another mock object
+mock_object.some_method(x=1, y=2) # returns a new mock object
+mock_object.some_method.assert_called_once()  # after the call, track interactions with the mock
 
-mock_object.some_method.assert_called_once() # we can track interactions with the mock object
+mock_object.some_method(3, y=4)  # call again
+mock_object.some_method.assert_has_calls([mock.call(x=1, y=2), mock.call(3, y=4)]) # assert many calls
 
 ```
 
 <!--
-A mock is a type of test_double that stand in place for real objects in our code.
+A mock is a type of `test_double` that stands in place for real objects in our code.
 
 It replaces the original object with one that we can control the behavior of, and allows us to track the interactions with the mocked object.
 
 In Python's built-in test framework there are two foundational classes that create mocks, 
-Mocks & MagicMocks.
+`Mock` & `MagicMock`.
+
+Now let's have a look at some features of the `Mock` class.
+
+We can call any method with any arguments, the method exists automatically, the return value will be a new mock.
+
+If we call the same method again, we can assert all of them at once. Be consistent  -- in mixing argument with keyword arguments in call assertions. You have to assert them the way they were called.
 -->
 
 ---
 
 # Difference between `MagicMock` and `Mock`
 
-The main difference is that `MagicMock` has "magic methods" ready to use, while `Mock` does not.
+`MagicMock` supports "magic methods", while `Mock` does not.
 
-Prefer `MagicMock` whenever an object uses special methods, like `Sequence` (`list`, `tuple`) or a context manager that defines `__enter__` & `__exit__`.
+<div v-click>
+
+Prefer `MagicMock` when using **special methods**, like `Sequence` (`list`, `tuple`) or a context manager that defines `__enter__` & `__exit__`.
 
 <div class="twocol">
 
-```python [example_magic_mock_pass.py ✅]
+```python [example_magic_mock_pass.py ✅] {6-7}
 import unittest.mock as mock
 
 mock_object = mock.MagicMock()
@@ -183,7 +198,7 @@ mock_object.__enter__.assert_called_once()
 mock_object.__len__.assert_called_once()
 ```
 
-```python [example_mock_fail.py ❌]
+```python [example_mock_fail.py ❌] {6-7}
 import unittest.mock as mock
 
 mock_object = mock.Mock()
@@ -197,8 +212,13 @@ with mock_object as m:
 ```
 </div>
 
+</div>
+
 <!--
 What is the difference between the two though?
+`MagicMock` supports magic methods .
+
+--
 
 Let's see an example, suppose we want to use the object in a `with` block. 
 
@@ -219,7 +239,7 @@ Does the function we are testing **own** the dependency we want to replace?
 
 <div class="twocol -mt-2">
 
-```python [test_example_with_dep.py]
+```python [test_example_with_dep.py] {5|4} {at: 1}
 import example_with_dep
 import unittest.mock as mock
 
@@ -232,7 +252,7 @@ def test_read_file(mock_io: mock.MagicMock):
   mock_io.return_value.__enter__.assert_called_once()
 ```
 
-```python [example_with_dep.py]
+```python [example_with_dep.py] {5} {at: 1}
 from io import FileIO
 
 # function directly uses FileIO
@@ -245,22 +265,32 @@ def read_file(filename: str) -> bytes:
 <div v-click class="mt-2 p-2 border rounded-xl bg-yellow-50 bg-opacity-75">
 Why global patching does not work?
 
-1. `from io import FileIO` creates a local reference to `FileIO` in the `example_with_dep` module.
+1. `from io import FileIO` binds local reference to `FileIO` in the `example_with_dep` module.
 2. Our patch targets `io.FileIO`, but `read_file` uses the local reference.
 3. We would have to patch before importing or `reload(example_with_dep)` - both not a good practice.
 
 </div>
 
 <!--
-By default `mock.patch` replaces the object with a `MagicMock`.
+But how to actually replace the real object with a test double?
 
-You can provide your own mock object with the `new` argument.
+In the case of a function that owns the dependency, we need to use `mock.patch` and patch the imported name where the dependency is being used. 
+
+By default `mock.patch`, replaces the object with a `MagicMock`.
+
+But you can provide your own mock object with the `new` argument.
+
+--
+
+Note that patching globally at the place `FileIO` is defined does not work. Why is that though? [bullets]
+
+--
 -->
 
 ---
 
-# Alternative: replace with Dependency Injection
-If function we are testing expects the dependency as an argument.
+# Better way: use Dependency Injection
+If the function we are testing expects the dependency as an argument.
 <br/> ➡️ pass the `MagicMock` instead, no need to use `mock.patch`
 
 <div class="twocol -mt-2">
@@ -282,24 +312,89 @@ def test_read_file():
 from io import FileIO
 
 # function directly uses FileIO
-def read_file(file_: FileIO) -> bytes:
+def read_file(opened_file: FileIO) -> bytes:
   # just operate on the file object
   # caller manages opening/closing
-  return f.read()
+  return opened_file.read()
 ```
 
 </div>
+
+<!--
+In cases where we test code that expects dependencies as arguments to function calls and we can control it.
+
+We can pass the mock object directly in place of the dependency.
+
+Additionally, we can set the `spec` argument to match the object being replaced, in this case `FileIO`.
+
+No need to use patch in this case.
+-->
+
+---
+
+# Extra: Other ways to patch
+Besides the decorator, we can also use `mock.patch` as a context manager.
+
+You can also use `mock.patch.object` to patch attributes on an **already imported** object.
+
+<div class="twocol -mt-2">
+
+```python [test_example_with_dep_context.py] {none|5-7}
+import example_with_dep
+import unittest.mock as mock
+
+def test_read_file():
+  with mock.patch(
+    "example_with_dep.FileIO", autospec=True
+  ) as mock_io:
+    example_with_dep.read_file("some-file.txt")
+
+    # assert that we entered the with block
+    mock_io.return_value.__enter__.assert_called_once()
+```
+
+```python [test_example_with_dep_object.py] {none|5-7}
+import example_with_dep
+import unittest.mock as mock
+
+def test_read_file():
+  with mock.patch.object(
+    example_with_dep, "FileIO", autospec=True
+  ) as mock_io:
+    example_with_dep.read_file("some-file.txt")
+
+    # assert that we entered the with block
+    mock_io.return_value.__enter__.assert_called_once()
+```
+
+</div>
+
+Use `autospec` to strictly fol `FileIO`'s protocol.
+
+<!--
+In case we cannot inject the dependency, there are many ways to patch besides the decorator we saw before.  --
+
+The most common ones are using `mock.patch` & `mock.patch.object` as context managers.
+
+-- We can use `mock.patch.object` to patch attributes of an object. 
+
+This is useful since we have already imported the module we want to test.
+
+Just like the decorator, the context manager starts and stops the patch for the duration of the `with` block.
+
+We can use `autospec` to have the mock automatically abide to `FileIO`'s protocol, any not defined method call will result in error.
+-->
 
 ---
 
 # What is a stub? How does it differ from a mock?
 It provides predefined responses to function calls, but does not track interactions.
 
-We can use a `Mock` or `MagicMock` object for stubbing by fixing the return value of a method.
+We can use a `Mock` or `MagicMock` object for stubbing by fixing the `return_value` of a method.
 
 These objects can double as both a mock and a stub.
 
-```python [example_stub_fixed.py]
+```python [example_stub_fixed.py] {none|5-6|8-10|13-14}
 import unittest.mock as mock
 
 mock_object = mock.Mock()
@@ -307,11 +402,27 @@ mock_object = mock.Mock()
 mock_object.some_method.return_value = "some value"
 assert mock_object.some_method() == "some value"
 
+mock_object.some_method.side_effect = [1, 2]
+assert mock_object.some_method() == 1
+assert mock_object.some_method() == 2
+
 # we can also raise exceptions
 mock_object.raise_method.side_effect = ValueError("some value")
-
 mock_object.raise_method()  # raises ValueError 💥 
 ```
+
+<!--
+As of now we have covered mocks but what is a stub, how do they differ?
+`Stubs` provide canned responses, helping us test outputs or control intermediate results.
+
+`Mock` & `MagicMock`, the usual suspects can be used to provide these results for functions that we expect to be called by the code we test. In our example this function is called `some_method`
+
+-- One way to set fixed response it to set the `return_value`,  this way every call will always return `some_value`
+
+-- In the case of repeated calls we can provide an iterable to the `side_effect` attribute
+
+-- Finally, to test against errors we can use `side_effect` to raise Exceptions like a `ValueError`
+-->
 
 ---
 
@@ -474,7 +585,7 @@ def get_headers(config: Configuration) -> dict:
 We maybe tempted to just stub authenticate by fixing its return value to a dummy `token` string.
 This test has full coverage, and it passes. 
 
-But if you recall `authenticate`'s signature, in fact we didn't actually propagate the `resource_id` we got in the configuration object.
+But if you recall `authenticate`'s signature, in fact we didn't actually propagate the `resource_id` that we got in the configuration object.
 
 Our unit test would still be successful, but we would totally miss the link between `resource_id` and the generated token.
 
@@ -483,7 +594,6 @@ Our unit test would still be successful, but we would totally miss the link betw
 To fix that, we can use mocks to also assert the arguments of the call to `authenticate`.
 
 Now if we forget to pass `resource_id`, the test will fail, alerting us to the bug.
-
 -->
 
 ---
@@ -518,6 +628,12 @@ class FakeStorageClient:
   def __init__(self):
     self.__store = {}
 
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    pass
+
   def __getitem__(self, key: str):
     return self.__store.get(key)
 
@@ -536,13 +652,12 @@ Let's say we have a slightly more sophisticated service that uses a `StorageClie
 
 I will show that this way I can test serialization, deserialization, and chunking logic without needing to stub every interaction with the storage client. I can check the number of chunks for a write operation, and I can check that the data I read is the same as what I wrote.
 
-
 ---
 
 # What is a spy?
 A spy is a test double that wraps a real object, allowing us to monitor its interactions while still using its actual implementation.
 
-We can use a `MagicMock` with the `wraps` argument to create a spy.
+We can use a `MagicMock` / `Mock` with the `wraps` argument to create a spy.
 
 <div class="flex flex-col -mt-4">
 
@@ -559,11 +674,11 @@ class DollarConverter:
   def convert_dollars(self, amount: float, currency: str) -> float:
     return rate.get(currency, 0) * amount
 
-spy_object = mock.MagicMock(wraps=DollarConverter(), autospec=True)
+spy_object = mock.Mock(wraps=DollarConverter(), autospec=True)
 euros = spy_object.convert_dollars(10, "EUR")
 
 assert euros == 9  # uses the real method
-spy_object.method.assert_called_once_with(3)  # tracks the call
+spy_object.convert_dollars.assert_called_once_with(10, "EUR")  # tracks the call
 ```
 
 </div>
@@ -595,3 +710,27 @@ show code
 </div>
 
 ---
+
+# Takeaway
+
+
+<v-clicks>
+
+
+* Prefer `MagicMock` over `Mock` unless you are sure you don't need magic methods
+
+* Use `autospec` to make the mock abide to the real object's protocol
+
+* Prefer Dependency Injection over patching when possible, use patching when you interact with 3rd party code, that is not modular
+
+* If you need to patch, patch where it is used
+
+* `Mock` & `MagicMock` can do all types of test doubles
+
+</v-clicks>
+
+---
+layout: center
+---
+
+# Thank you! 😊
