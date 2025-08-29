@@ -786,22 +786,37 @@ FakeStoragClient is a drop in replacement for StorageClient.
 
 Just inject the FakeStorageClient, you can also wrap it through a Mock, to track interactions 
 
-```python [test_with_fake.py]
+```python [test_with_fake.py] {4-7|10-17}
+
 from fake_storage import FakeStorageClient
 from service import save_json, load_json
 
 def test_save_load_round_trip():
   fake = FakeStorageClient()
-  save_json(fake, "user_001", {"name": "Alice", "age": 30, "bio": "lipsum" * 100})
-  assert load_json(fake, "user_001") == {"name": "Alice", "age": 30, "bio": "lipsum" * 100}
+  save_json(mock_fake, "user_001", {"name": "Alice", "age": 30, "bio": "lipsum" * 100})
+  assert load_json(mock_fake, "user_001") == {"name": "Alice", "age": 30, "bio": "lipsum" * 100}
+ 
+
+def test_save_load_round_trip_fake_plus_mock():
+  fake = FakeStorageClient()
+  mock_fake = mock.MagicMock(wraps=fake, autospec=True)
+
+  save_json(mock_fake, "user_001", {"name": "Alice", "age": 30, "bio": "lipsum" * 100})
+  assert load_json(mock_fake, "user_001") == {"name": "Alice", "age": 30, "bio": "lipsum" * 100}
+ 
+  mock_fake.__getitem__.assert_called_with("user_001/chunks_length")
 ```
 
 <!--
-Fits naturally especially with dependency injection,
+`FakeStorageClient` comes to the rescue, as it provides a drop in ... lightweight replacement ... for the real `StorageClient`.
 
-Even if we required stubbing we would just wrap the FakeClient and we would have the additional benefit of tracking the calls
+And we don't even need to replace it via a patch since we use `Dependency Injection`.
 
-No need to maintain stub states, just inspect the FakeStorageClient in between save and load calls
+No need to maintain stub states.
+
+-- If we want to track the calls to the fake's `getitem` magic method, let's say to assert we retrieved the chunks length and didn't hardcode it inside the fake.
+
+ We can wrap it with a `MagicMock`.
 -->
 
 ---
@@ -859,16 +874,16 @@ At the same time, because it’s also a mock, we can assert that the method was 
 
 <div class="grid grid-cols-5 auto-rows-min gap-0 max-w-4xl mx-auto mt-10">
   <div v-click class="col-span-2 row-start-1 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
-    Mocks 🎭 <br/> <span class="text-xl font-semibold italic"> verifies behavior </span>
+    Mock 🎭 <br/> <span class="text-xl font-semibold italic"> verifies behavior </span>
   </div>
   <div v-click class="col-span-2 col-start-2 row-start-2 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
-    Stubs 🪤 <br/> <span class="text-xl font-semibold italic"> controls outputs </span>
+    Stub 🪤 <br/> <span class="text-xl font-semibold italic"> controls outputs </span>
   </div>
   <div v-click class="col-span-2 col-start-3 row-start-3 border-2 rounded-2xl p-6 shadow-lg text-center  -mt-4 bg-white">
-    Fakes 🏗️ <br/> <span class="text-xl font-semibold italic">working minimal replacements</span>
+    Fake 🏗️ <br/> <span class="text-xl font-semibold italic">working minimal replacement</span>
   </div>
   <div v-click class="col-span-2 col-start-4 row-start-4 border-2 rounded-2xl p-6 shadow-lg text-center -mt-4 bg-white">
-    Spies 🕵️ <br/> <span class="text-xl font-semibold italic">wraps real code for inspection</span>
+    Spy 🕵️ <br/> <span class="text-xl font-semibold italic">wraps real code for inspection</span>
   </div>
 </div>
 
@@ -899,11 +914,15 @@ We covered...
 </v-clicks>
 
 <!--
-A few more things to watch for...
+A few more things to have in mind...
 -->
 
 ---
 layout: center
 ---
 
-# Thank you! 😊
+# Thank you very much! 😊
+
+<!--
+Thank you very much!
+-
