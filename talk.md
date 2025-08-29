@@ -302,9 +302,7 @@ import unittest.mock as mock
 def test_read_file():
   mock_io = mock.MagicMock(spec=FileIO)
 
-  mock_io.open()
   example_with_di.read_file(mock_io)
-  mock_io.close()
 
   # assert that we entered the with block
   mock_io.read.assert_called_once()
@@ -355,11 +353,11 @@ import unittest.mock as mock
 def test_read_file():
   with mock.patch(
     "example_with_dep.FileIO", autospec=True
-  ) as mock_io:
+  ) as mock_:
     example_with_dep.read_file("some-file.txt")
 
     # assert that we entered the with block
-    mock_io.return_value.__enter__.assert_called_once()
+    mock_.return_value.__enter__.assert_called_once()
 ```
 
 ```python [test_example_with_dep_object.py] {none|5-7}
@@ -373,12 +371,12 @@ def test_read_file():
     example_with_dep.read_file("some-file.txt")
 
     # assert that we entered the with block
-    mock_io.return_value.__enter__.assert_called_once()
+    mock_.return_value.__enter__.assert_called_once()
 ```
 
 </div>
 
-Use `autospec` to automatically follow `FileIO`'s protocol.
+Use `autospec` to automaticallyy follow `FileIO`'s protocol.
 
 <!--
 If we can’t inject, we patch as we saw earlier. 
@@ -614,7 +612,8 @@ Avoids complex dependencies, I/O operations, or external services ➕ no need ma
 
 ```python [storage.py]
 # real dependency (talks to a service)
-class StorageClient:
+# assume StorageProvider implements connection methods
+class StorageClient(Mapping, StorageProvider):
   def __enter__(self):
     self.connect()
     return self
@@ -629,9 +628,9 @@ class StorageClient:
     self.write_to_service(key, value)
 ```
 
-```python [example_fake.py]
+```python [fake_storage.py]
 # fake dependency (in-memory implementation)
-class FakeStorageClient:
+class FakeStorageClient(Mapping):
   def __init__(self):
     self.__store = {}
 
@@ -658,6 +657,8 @@ Unlike stubs, you don’t have to predefine return values. The fake behaves like
 
 That means no network calls, no file I/O, and no external services — but still realistic behavior.
 
+Let's see an example:
+
 On the left, the real StorageClient - let's suppose it follows the Mapping protocol -  talks to real a service.
 
 On the right, the FakeStorageClient just uses an in-memory dictionary.
@@ -667,12 +668,86 @@ This avoids maintaining stub states and makes tests faster and more reliable, wh
 
 ---
 
-# Concrete example: using a fake for testing
-We have a service that uses a `StorageClient` to read and write data.
+# An example: Serdes on top of StorageClient
+Imagine we build serialization + chunking on top of the StorageClient
+```python [service.py]
+import json
+from storage import StorageClient 
 
-Let's say we have a slightly more sophisticated service that uses a `StorageClient` to read and write data, serilize and deserialize JSON, and chunk them before saving if they are too large.
+def save_json(storage: StorageClient, key: str, obj: dict, *, chunk_size: int = 8) -> None:
+  """Serialize to JSON, split into fixed-size chunks, store parts + index."""
+  data = json.dumps(obj).encode("utf-8")  # encode
+  chunks = [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
+  for i, chunk in enumerate(chunks):
+      storage[f"{key}/chunk/{i}"] = chunk
+  storage[f"{key}/index"] = len(chunks)
 
-I will show that this way I can test serialization, deserialization, and chunking logic without needing to stub every interaction with the storage client. I can check the number of chunks for a write operation, and I can check that the data I read is the same as what I wrote.
+def load_json(storage: StorageClient, key: str) -> dict:
+    """Read index, reassemble chunks, deserialize."""
+    n = storage[f"{key}/index"]
+    data = b"".join(storage[f"{key}/chunk/{i}"] for i in range(n))
+    return json.loads(data.decode("utf-8"))
+```
+
+<!--
+We
+-->
+
+---
+
+# Stubbing this can get be complicated
+
+
+```python [test_with_stub.py]
+from storage
+from service import save_json, load_json
+
+def test_save_load_round_trip():
+  # Stub only: no state, everything pre-scripted
+  storage = mock.Mock(spec=StorageClient)
+  payload = {"name": "Alice", "age": 30, "bio": "lipsum" * 100}
+  data = json.dumps(payload).encode("utf-8")
+  parts = [data[i:i+8] for i in range(0, len(data), 8)]  # duplicate chunking logic 😬
+
+  # omitted for brevity, we need stub __getitem__ for index and chunks
+  # can be several lines of implementation just for the sake of stubbing
+  storage.__getitem__.side_effect = lambda s: len(chunks) \
+    if s == f"{key}/index" else storage[int(s.rsplit("/", 1)[-1])]
+
+  save_json(storage, "user", payload, chunk_size=8)
+  assert load_json(storage, "user") == payload
+```
+
+<!--
+Needs potentially duplicated code to produce the intermediate stubs for the serialization and deserialization
+
+What's more additional complex logic for getting the items depending on the argument call
+-->
+
+---
+
+# Faking with dependency injection
+FakeStoragClient is a drop in replacement for StorageClient.
+
+Just inject the FakeStorageClient, you can also wrap it through a Mock, to track interactions 
+
+```python [test_with_fake.py]
+from fake_storage import FakeStorageClient
+from service import save_json, load_json
+
+def test_save_load_round_trip():
+  fake = FakeStorageClient()
+  save_json(fake, "user_001", {"name": "Alice", "age": 30, "bio": "lipsum" * 100})
+  assert load_json(fake, "user_001") == {"name": "Alice", "age": 30, "bio": "lipsum" * 100}
+```
+
+<!--
+Fits naturally especially with dependency injection,
+
+Even if we required stubbing we would just wrap the FakeClient and we would have the additional benefit of tracking the calls
+
+No need to maintain stub states, just inspect the FakeStorageClient in between save and load calls
+-->
 
 ---
 
@@ -683,7 +758,7 @@ We can use a `MagicMock` / `Mock` with the `wraps` argument to create a spy.
 
 <div class="flex flex-col -mt-4">
 
-```python [example_spy.py]
+```python [example_spy.py] {none|13|17}
 import unittest.mock as mock
 
 class DollarConverter:
@@ -694,7 +769,7 @@ class DollarConverter:
   } # static data
 
   def convert(self, amount: float, currency: str) -> float:
-    return rate.get(currency, 0) * amount
+    return rates.get(currency, 0) * amount
 
 spy_object = mock.Mock(wraps=DollarConverter(), autospec=True)
 euros = spy_object.convert(10, "EUR")
@@ -704,6 +779,22 @@ spy_object.convert.assert_called_once_with(10, "EUR")  # tracks the call
 ```
 
 </div>
+
+<!--
+What is a spy?
+
+A spy is a test double that wraps a real object. Unlike a stub or a mock, it still runs the real implementation, but we also get to track interactions.
+
+--
+
+In Python, we can create one with Mock or MagicMock using the `wraps` argument.
+
+Here’s an example: the DollarConverter has some static exchange rates. When we call convert(10, "EUR"), the spy runs the real logic and returns 9, just as expected.
+
+--
+
+At the same time, because it’s also a mock, we can assert that the method was called once with the right arguments.
+-->
 
 ---
 
