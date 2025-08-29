@@ -91,9 +91,9 @@ A test double is to code what a stunt double is to an actor.
 <img border="rounded" src="/test_double_bears.png" alt="" class="w-full h-[90%] object-contain"/>
 
 <!--
-Just like actors don’t perform every dangerous scene themselves and stunt doubles step in for them.
+Just like actors don’t perform every dangerous scene by themselves and stunt doubles step in for them, instead.
 
-Okay maybe not Tom Cruise, he does his own stunts.
+Okay maybe that's not true for Tom Cruise, he does his own stunts.
 
 In the same way, we use test doubles in place of real objects. They take the risks for us — making our tests faster, safer, and more predictable.
 
@@ -133,7 +133,7 @@ And in fact they can be used together as well.
 
 ---
 
-# What is a mock?
+# What is a mock? 🎭
 
 A type of test double that we can use to replace real objects in our code.
 
@@ -141,6 +141,7 @@ Replace real object ➡️ Control behavior ➡️ Track interactions (call argu
 
 In `unittest` framework ➡️ create mocks with either `Mock` or `MagicMock`.
 
+<v-clicks>
 ```python [example_mock.py] {none|5,8-9}
 import unittest.mock as mock
 
@@ -153,6 +154,7 @@ mock_object.some_method(3, y=4)  # call again
 mock_object.some_method.assert_has_calls([mock.call(x=1, y=2), mock.call(3, y=4)]) # assert many calls
 
 ```
+</v-clicks>
 
 <!--
 A mock is a type of `test_double` that stands in place for real objects in our code.
@@ -162,11 +164,16 @@ It replaces the original object with one that we can control the behavior of, an
 In Python's built-in test framework there are two foundational classes that create mocks, 
 `Mock` & `MagicMock`.
 
+--
+
 Now let's have a look at some features of the `Mock` class.
 
-We can call any method with any arguments, the method exists automatically, the return value will be a new mock.
+We can call any method with any arguments, and the method exists automatically.
+While the return value will be a new mock.
 
-If we call the same method again, we can assert all of them at once. Be consistent  -- in mixing argument with keyword arguments in call assertions. You have to assert them the way they were called.
+If we call the same method again, we can assert all of them at once. 
+
+Just be consistent  -- in mixing argument with keyword arguments in call assertions. You have to assert them the way they were called, in the exact order.
 -->
 
 ---
@@ -177,7 +184,7 @@ If we call the same method again, we can assert all of them at once. Be consiste
 
 <div v-click>
 
-Prefer `MagicMock` when using **special methods**, like `Sequence` (`list`, `tuple`) or a context manager that defines `__enter__` & `__exit__`.
+Prefer `MagicMock` when using **magic methods**, like `Sequence` (`list`, `tuple`) or a context manager that defines `__enter__` & `__exit__`.
 
 <div class="twocol">
 
@@ -224,11 +231,11 @@ Let's see an example, suppose we want to use the object in a `with` block.
 
 In order to do that our object needs to define the context manager protocol, this means it needs to define `__enter__` & `__exit__` ,  which are magic methods.
 
-However, `Mock` objects do not do this automatically! As we can see in the right column our snippet fails with a `TypeError`
+However, `Mock` objects do not do this automatically! As we can see in the right column our snippet fails with a `TypeError`.
 
 We have to use a `MagicMock` if we are going call magic methods in the code we are replacing. 
 
-And this is not limited to `with` blocks, it might as well be other special methods like `length`, if the object we are replacing behaves like a  `Sequence`.
+And this is not limited to `with` blocks, it might as well be other special methods like `length`, should the object we are replacing behave like a  `Sequence`, a list or a tuple.
 -->
 
 ---
@@ -276,7 +283,9 @@ But how to actually replace the real object with a test double?
 
 In the case of a function that owns the dependency, we need to use `mock.patch` and patch the imported name where the dependency is being used. 
 
-By default `mock.patch`, replaces the object with a `MagicMock`.
+For example `read_file` owns the `FileIO` dependency, and it is responsible for opening & closing it before reading from it. 
+
+In the left column we patch it, and by default `mock.patch`, replaces the object with a `MagicMock`.
 
 But you can provide your own mock object with the `new` argument.
 
@@ -285,6 +294,14 @@ But you can provide your own mock object with the `new` argument.
 Note that patching globally at the place `FileIO` is defined does not work. Why is that though? [bullets]
 
 --
+
+Well, when we import FileIO from io module, inside our example module we bind a local reference to the name `FileIO`. 
+
+Secondly, our patch targets the global `FileIO` name, but read_file uses the local reference already, so it won't capture our patch.
+
+To fix that we would have to do lazy importing, which would have called our patch before importing our example module.
+
+Or we would have reload explicitly, both of them not a good practice.
 -->
 
 ---
@@ -295,7 +312,7 @@ If the function we are testing expects the dependency as a parameter.
 
 <div class="twocol -mt-2">
 
-```python [test_example_with_di.py] {none|5,14-15}
+```python [test_example_with_di.py] {none|5,12-13}
 import example_with_di
 import unittest.mock as mock
 
@@ -334,7 +351,7 @@ When a function accepts its dependency as a parameter, there’s no need to patc
 
 -- In the test, we create a MagicMock with a spec argument. The spec makes the mock strictly follow the protocol of the FileIO class.
 
-That’s why calling an arbitrary method on it raises an AttributeError the mock only allows real FileIO methods.
+That’s why calling an arbitrary method on it raises an AttributeError. The mock only allows real FileIO methods.
 -->
 
 ---
@@ -385,14 +402,16 @@ If we can’t inject, we patch as we saw earlier.
 
 -- `patch.object` is also handy when the module is already imported, and we patch its attributes directly.
 
-Just like the decorator, the patch only lives for the with block.
+Just like the decorator lives for the duration of the wrapped function's scope.
+
+The patch lives for the scope of  the `with block`.
 
 We can use the `autospec` flag to have the mock automatically deduce which protocol to follow.
 -->
 
 ---
 
-# What is a stub? How does it differ from a mock?
+# What is a stub? 🪤 How does it differ from a mock?
 It provides predefined responses to function calls, but does not track interactions.
 
 We can use a `Mock` or `MagicMock` object for stubbing by fixing the `return_value` of a method.
@@ -420,11 +439,11 @@ mock_object.raise_method()  # raises ValueError 💥
 As of now we have covered mocks but what is a stub, how does it differ?
 `Stubs` provide canned responses, helping us test outputs or control intermediate results.
 
-`Mock` & `MagicMock`, the usual suspects can be used to provide these results for functions that we expect to be called by the code we test. In our example this function is called `some_method`
+`Mock` & `MagicMock`, the usual suspects...can be used to provide these results...for functions that we expect to be called in  our unit. In our example this function is called `some_method`
 
--- One way to set fixed response it to set the `return_value`,  this way every call will always return `some_value`
+-- One way to set fixed responses is to set the `return_value`,  this way every call will always return `some_value`
 
--- In the case of repeated calls we can provide an iterable to the `side_effect` attribute
+-- In the case of repeated calls with different return values we can provide an iterable to the `side_effect` attribute
 
 -- Finally, to test against errors we can use `side_effect` to raise Exceptions like a `ValueError`
 -->
@@ -453,6 +472,8 @@ def authenticate(account_id: str, resource_id: Optional[str] = None) -> str:
 ```
 
 <!--
+Let's see an example.
+
 We have an in-house authentication library with a function called authenticate. 
 
 It goes off to some remote service and gives us back a token.
@@ -470,14 +491,15 @@ but other times we need a token specific to a resource, like a storage service.
 
 We want to include the token in the `Authorization` header of our HTTP requests, along with some static headers. These headers are part of a client library we are writing.
 
-```python [headers.py]
+```python [headers.py] {1-3|6-8|10-13}
 class Configuration:
  user_id: str
  resource_id: Optional[str] = None
 
 def get_headers(config: Configuration) -> dict:
  token = authlib.authenticate(
-   config.user_id
+   config.user_id,
+   config.resource_id
  )
 
  return {
@@ -487,7 +509,9 @@ def get_headers(config: Configuration) -> dict:
 ```
 
 <!--
-Our utility function get_headers takes this configuration, calls authlib.authenticate, and uses the returned token to build a dictionary of HTTP headers.
+Our utility function get_headers takes this configuration, -- calls authlib.authenticate, and uses the returned token to build a dictionary of HTTP headers. 
+
+--
 
 We include the token in the Authorization header of our request, along some static headers like content-type.
 
@@ -587,6 +611,8 @@ def get_headers(config: Configuration) -> dict:
 </div>
 
 <!--
+Let's look at the left column.
+
 We maybe tempted to just stub authenticate by fixing its return value to a dummy `token` string.
 This test has full coverage, and it passes. 
 
@@ -603,7 +629,7 @@ Now if we forget to pass `resource_id`, the test will fail, alerting us to the b
 
 ---
 
-# What is a fake?
+# What is a fake? 🏗️
 A fake is a working implementation, but it is kept lightweight for testing purposes.
 
 Avoids complex dependencies, I/O operations, or external services ➕ no need maintaining stub states.
@@ -651,54 +677,75 @@ class FakeStorageClient(Mapping):
 
 <!--
 Do we have to always use stubs? What is a fake?
-A fake is a working implementation, but simplified for testing.
+A fake is a working implementation of a real object, but simplified for testing.
 
 Unlike stubs, you don’t have to predefine return values. The fake behaves like the real thing, just without the heavy parts.
 
-That means no network calls, no file I/O, and no external services — but still realistic behavior.
+That means no network calls, no file I/O, and no external services but ... still with realistic behavior.
 
 Let's see an example:
 
-On the left, the real StorageClient - let's suppose it follows the Mapping protocol -  talks to real a service.
+_On the left, the real StorageClient - let's suppose it follows the Mapping protocol, and it behaves like a dictionary with `getitem` and `setitem`. 
+It also supports the context manager protocol, as we saw this means that it has `enter` & `exit` magic methods.
 
-On the right, the FakeStorageClient just uses an in-memory dictionary.
+And it talks to real a service, with functions provided by StorageProvider base class.
 
-This avoids maintaining stub states and makes tests faster and more reliable, while being close enough to production behavior.
+_On the right, the FakeStorageClient just uses an in-memory dictionary, instead of connecting to the real thing.
+
+This keeps implementation lightweight, avoids maintaining stub states and makes tests faster and more reliable, while being close enough to production behavior.
 -->
 
 ---
 
-# An example: Serdes on top of StorageClient
+# An example: SerDe on top of StorageClient
 Imagine we build serialization + chunking on top of the StorageClient
-```python [service.py]
+```python [service.py] {none|4|6|7-9|10|12|14|15|16}
 import json
 from storage import StorageClient 
 
-def save_json(storage: StorageClient, key: str, obj: dict, *, chunk_size: int = 8) -> None:
+def save_object(storage: StorageClient, key: str, obj: dict, *, chunk_size: int = 8) -> None:
   """Serialize to JSON, split into fixed-size chunks, store parts + index."""
   data = json.dumps(obj).encode("utf-8")  # encode
   chunks = [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
   for i, chunk in enumerate(chunks):
       storage[f"{key}/chunk/{i}"] = chunk
-  storage[f"{key}/index"] = len(chunks)
+  storage[f"{key}/chunks_length"] = len(chunks)
 
-def load_json(storage: StorageClient, key: str) -> dict:
+def load_object(storage: StorageClient, key: str) -> dict:
     """Read index, reassemble chunks, deserialize."""
-    n = storage[f"{key}/index"]
+    n = storage[f"{key}/chunks_length"]
     data = b"".join(storage[f"{key}/chunk/{i}"] for i in range(n))
     return json.loads(data.decode("utf-8"))
 ```
 
 <!--
-We
+Let's suppose we need to build a more complex storage client, with serialization and chunking, due to some practical network restrictions. 
+
+Let's also suppose we cannot modularize the code further.
+
+-1- We have the `save_object` function that takes a `StorageClient`, a `key` which will be the name of the object inside ... our storage, and the `obj` which is the `dictionary` to be saved.
+
+-2- Next  we serialize the `dictionary` to json format and we encode. 
+
+-3- Now we have the serialized data and we need to chunk them based on the `chunk_size` parameter
+
+-4- we also keep track of the `chunks length` to help us during reassembly
+
+-5- For the `load_object` we accept the `StorageClient`, and the `key` of the object.
+
+-6- We need to reverse the operations, so we first retrieve the number of chunks
+
+-7- Then we assemble the chunks in a `bytes` object
+
+-8- And finally we decode the `bytes` and load the `json` string.
 -->
 
 ---
 
-# Stubbing this can get be complicated
+# Using stubs to test this gets complicated
 
 
-```python [test_with_stub.py]
+```python [test_with_stub.py] {none|8-9|13-14}
 from storage
 from service import save_json, load_json
 
@@ -709,19 +756,27 @@ def test_save_load_round_trip():
   data = json.dumps(payload).encode("utf-8")
   parts = [data[i:i+8] for i in range(0, len(data), 8)]  # duplicate chunking logic 😬
 
-  # omitted for brevity, we need stub __getitem__ for index and chunks
+  # omitted for brevity, we need to stub __getitem__ / __setitem__ for index and chunks
   # can be several lines of implementation just for the sake of stubbing
-  storage.__getitem__.side_effect = lambda s: len(chunks) \
-    if s == f"{key}/index" else storage[int(s.rsplit("/", 1)[-1])]
-
+  storage.__getitem__.side_effect = ...
+  storage.__setitem__.side_effect = ...
+  
   save_json(storage, "user", payload, chunk_size=8)
   assert load_json(storage, "user") == payload
 ```
 
 <!--
-Needs potentially duplicated code to produce the intermediate stubs for the serialization and deserialization
+We also need to test this, would stubbing be a good choice here?
 
-What's more additional complex logic for getting the items depending on the argument call
+Well stubbing can easily get complicated in this case
+
+-- We need to reimplement the chunking logic of the real solution to produce the intermediate stubs for the serialization and deserialization
+
+-- What's more we need complex logic for getting and setting the individual `chunks` and the `chunk_length`.
+
+And you can imagine how convoluted this can be in a few iterations.
+
+ If we need to add a new step or change the serialization step...for a compression step.
 -->
 
 ---
@@ -758,7 +813,7 @@ We can use a `MagicMock` / `Mock` with the `wraps` argument to create a spy.
 
 <div class="flex flex-col -mt-4">
 
-```python [example_spy.py] {none|13|17}
+```python [example_spy.py] {none|13|14|17}
 import unittest.mock as mock
 
 class DollarConverter:
@@ -789,19 +844,14 @@ A spy is a test double that wraps a real object. Unlike a stub or a mock, it sti
 
 In Python, we can create one with Mock or MagicMock using the `wraps` argument.
 
-Here’s an example: the DollarConverter has some static exchange rates. When we call convert(10, "EUR"), the spy runs the real logic and returns 9, just as expected.
+Here’s an example, called DollarConverter which has some static exchange rates. 
+
+-- When we call convert(10 dollars to "EUR"), the spy runs the real logic and returns 9, just as expected.
 
 --
 
 At the same time, because it’s also a mock, we can assert that the method was called once with the right arguments.
 -->
-
----
-
-# Using a spy to inspect serialization/deserialization for StorageClient
-We can use a spy to wrap the real `StorageClient` and monitor its interactions while still using its actual implementation.
-
-show code
 
 ---
 
