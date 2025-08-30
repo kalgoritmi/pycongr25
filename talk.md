@@ -173,7 +173,7 @@ While the return value will be a new mock.
 
 If we call the same method again, we can assert all of them at once. 
 
-Just be consistent  -- in mixing argument with keyword arguments in call assertions. You have to assert them the way they were called, in the exact order.
+Just be consistent  -- in mixing arguments...with keyword arguments in call assertions. You have to assert them the way they were called, in the exact order.
 -->
 
 ---
@@ -233,7 +233,7 @@ In order to do that our object needs to define the context manager protocol, thi
 
 However, `Mock` objects do not do this automatically! As we can see in the right column our snippet fails with a `TypeError`.
 
-We have to use a `MagicMock` if we are going call magic methods in the code we are replacing. 
+We have to use a `MagicMock` if we are going to call magic methods in the code we are replacing. 
 
 And this is not limited to `with` blocks, it might as well be other special methods like `length`, should the object we are replacing behave like a  `Sequence`, a list or a tuple.
 -->
@@ -301,7 +301,7 @@ Secondly, our patch targets the global `FileIO` name, but read_file uses the loc
 
 To fix that we would have to do lazy importing, which would have called our patch before importing our example module.
 
-Or we would have reload explicitly, both of them not a good practice.
+Or we would have to reload explicitly, both of them are not a good practice.
 -->
 
 ---
@@ -393,7 +393,7 @@ def test_read_file():
 
 </div>
 
-Use `autospec` to automaticallyy follow `FileIO`'s protocol.
+Use `autospec` to automatically follow `FileIO`'s protocol.
 
 <!--
 If we can’t inject, we patch as we saw earlier. 
@@ -685,14 +685,14 @@ That means no network calls, no file I/O, and no external services but ... still
 
 Let's see an example:
 
-_On the left, the real StorageClient - let's suppose it follows the Mapping protocol, and it behaves like a dictionary with `getitem` and `setitem`. 
+~ On the left, the real StorageClient - let's suppose it follows the Mapping protocol, and it behaves like a dictionary with `getitem` and `setitem`. 
 It also supports the context manager protocol, as we saw this means that it has `enter` & `exit` magic methods.
 
-And it talks to real a service, with functions provided by StorageProvider base class.
+And it talks to real a service, with implementation methods provided by `StorageProvider` base class.
 
-_On the right, the FakeStorageClient just uses an in-memory dictionary, instead of connecting to the real thing.
+~ On the right, the `FakeStorageClient` just uses an in-memory dictionary, instead of connecting to the real thing.
 
-This keeps implementation lightweight, avoids maintaining stub states and makes tests faster and more reliable, while being close enough to production behavior.
+This keeps implementation lightweight, avoids maintaining stub states and makes tests faster and more reliable. While being close enough to production behavior.
 -->
 
 ---
@@ -821,7 +821,7 @@ No need to maintain stub states.
 
 ---
 
-# What is a spy?
+# What is a spy? 🕵️
 A spy is a test double that wraps a real object, allowing us to monitor its interactions while still using its actual implementation.
 
 We can use a `MagicMock` / `Mock` with the `wraps` argument to create a spy.
@@ -853,11 +853,11 @@ spy_object.convert.assert_called_once_with(10, "EUR")  # tracks the call
 <!--
 What is a spy?
 
-A spy is a test double that wraps a real object. Unlike a stub or a mock, it still runs the real implementation, but we also get to track interactions.
+A spy is a test double that wraps a real object, instead of the fake object we saw previously. Unlike a stub or a mock, it still runs the real implementation, but we also get to track interactions.
 
 --
 
-In Python, we can create one with Mock or MagicMock using the `wraps` argument.
+In Python `unittest`, we can create one with Mock or MagicMock using the `wraps` argument.
 
 Here’s an example, called DollarConverter which has some static exchange rates. 
 
@@ -909,7 +909,7 @@ We covered...
 
 * If you need to patch, **patch where the dependency is used**
 
-* In `unittest`, `Mock` & `MagicMock` can be used in a way that combines all types of test doubles
+* In `unittest`, `Mock` & `MagicMock` can be used in a way that combines all types of test doubles, to achieve completeness
 
 </v-clicks>
 
